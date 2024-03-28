@@ -1,0 +1,102 @@
+#include "e2d_core.h"
+
+typedef struct vehicle_t {
+    Vector2 location;
+    Vector2 velocity;
+    Vector2 accel;
+    Vector2 heading;
+    float radius;
+    float max_steer;
+    float max_desired;
+} Vehicle;
+
+typedef struct target_t {
+    Vector2 location;
+    float zone;
+} Target;
+
+Vehicle createVehicle(float x, float y, float r) {
+    Vehicle result = {
+        .location = {x, y},
+        .radius = r,
+        .velocity = {0, 0},
+        .accel = {0, 0},
+        .max_steer = 5.0f,
+        .max_desired = 8.0f
+        };
+    return result;
+} 
+
+Target createTarget(float x, float y, float z) {
+    Target result = {
+        .location = {x, y},
+        .zone = z
+    };
+    return result;
+}
+
+void applyForce(Vehicle *vehic, Vector2 force) {
+    vehic->accel = e2_VecAdd(vehic->accel, e2_VecDiv(force, vehic->radius*2));
+}
+
+void seek(Vehicle* vehic, Vector2 target) {
+    float zone = 300.0f;
+    Vector2 desired = e2_VecSub(target, vehic->location);
+    float distance = e2_mag(desired);
+    e2_vecNorm(&desired);
+
+    if (distance > zone) {
+        e2_vecScale(&desired, vehic->max_desired);
+    } else {
+        float arrive = e2_map(distance, zone, vehic->max_desired);
+        e2_vecScale(&desired, arrive);
+    }
+    Vector2 steer = e2_VecSub(desired, vehic->velocity); 
+    e2_vecLimit(&steer, vehic->max_steer);
+    applyForce(vehic, steer);
+}
+
+void updateVehicle(Vehicle* vehic) {
+    vehic->velocity = e2_VecAdd(vehic->velocity, vehic->accel);
+    e2_vecLimit(&vehic->velocity, 25.0f);
+    e2_vecSet(&vehic->accel, 0.0f, 0.0f);
+    vehic->location = e2_VecAdd(vehic->location, vehic->velocity);
+}
+
+void drawVehicle(Vehicle* vehic, Color c1, Color c2) {
+    Vector2 orientation = vehic->velocity;
+    e2_vecSetMag(&orientation, vehic->radius * 1.4f);
+    DrawRing(vehic->location, vehic->radius - 3, vehic->radius, 0, 360, 1, c1);
+    DrawLineEx(vehic->location, e2_VecAdd(vehic->location, orientation), 2, c2);
+}
+
+void drawTarget(Target* target, Color c1, Color c2) {
+    DrawCircleV(target->location, 5, c1);
+    DrawRing(target->location, target->zone - 3, target->zone, 0, 360, 1, c2);
+}
+
+int main() {
+    const int screenWidth = 1600;
+    const int screenHeight = 1200; 
+
+    InitWindow(screenWidth, screenHeight, "seeking and arrive");
+    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+
+    Target target = createTarget(800, 600, 200);
+    Vehicle mover = createVehicle(100, 400, 20);
+    mover.velocity = (Vector2){12, -8};    
+    // Main game loop
+    while (!WindowShouldClose()) {
+        BeginDrawing();
+        seek(&mover, target.location);
+        updateVehicle(&mover);
+        ClearBackground(DARKBLUE);
+        drawVehicle(&mover, LIGHTGRAY, RED);
+        drawTarget(&target, GREEN, RED);
+    	EndDrawing();
+    }
+
+    CloseWindow();   
+
+    return EXIT_SUCCESS;
+}

@@ -1,0 +1,88 @@
+#include "e2d_core.h"
+
+typedef struct vehicle_t {
+    Vector2 location;
+    Vector2 velocity;
+    Vector2 accel;
+    float radius;
+    float max_steer;
+    float max_desired;
+} Vehicle;
+
+void applyForce(Vehicle *vehic, Vector2 force) {
+    vehic->accel = e2_VecAdd(vehic->accel, e2_VecDiv(force, vehic->radius*2));
+}
+
+Vehicle createVehicle(float x, float y, float r) {
+    Vehicle result = {
+        .location = {x, y},
+        .radius = r,
+        .velocity = {0, 0},
+        .accel = {0, 0},
+        .max_steer = 8.0f,
+        .max_desired = 8.0f
+        };
+    return result;
+} 
+
+void updateVehicle(Vehicle* vehic) {
+    vehic->velocity = e2_VecAdd(vehic->velocity, vehic->accel);
+    e2_vecLimit(&vehic->velocity, 10.0f);
+    e2_vecSet(&vehic->accel, 0.0f, 0.0f);
+    vehic->location = e2_VecAdd(vehic->location, vehic->velocity);
+}
+
+void drawVehicle(Vehicle* vehic, Color c1, Color c2) {
+    Vector2 orientation = vehic->velocity;
+    e2_vecSetMag(&orientation, vehic->radius * 1.4f);
+    DrawRing(vehic->location, vehic->radius - 3, vehic->radius, 0, 360, 1, c1);
+    DrawLineEx(vehic->location, e2_VecAdd(vehic->location, orientation), 2, c2);
+}
+
+void wanderVehicle(Vehicle* vehic) {
+    float radius = 80.0f;
+    Vector2 direction = vehic->velocity;
+    e2_vecNorm(&direction);
+    e2_vecScale(&direction, 120);
+    direction = e2_VecAdd(vehic->location, direction);
+    DrawCircleV(direction, 3, RED);
+    DrawRing(direction, radius-1, radius, 0, 360, 1, RED);
+    float range = PI*2;
+    float new_point = e2_random(0, range) + e2_heading(vehic->velocity);
+    float posX = cosf(new_point) * radius;
+    float posY = sinf(new_point) * radius;
+    Vector2 new_direction = e2_VecAdd(direction, (Vector2){posX, posY});
+    DrawCircleV(new_direction, 3, GREEN); 
+    DrawLineEx(vehic->location, new_direction, 1, GREEN);
+
+    Vector2 steer = e2_VecSub(new_direction, vehic->location);
+    e2_vecLimit(&steer, vehic->max_steer);
+    float max_speed = e2_mag(vehic->velocity);
+    e2_vecAdd(&vehic->velocity, e2_VecDiv(steer, vehic->radius*2));
+    e2_vecLimit(&vehic->velocity, max_speed);
+}
+
+int main() {
+    const int screenWidth = 1600;
+    const int screenHeight = 1200; 
+
+    InitWindow(screenWidth, screenHeight, "seeking and arrive");
+    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+
+    Vehicle mover = createVehicle(400, 400, 20);
+    mover.velocity = (Vector2){4, 1};
+
+    // Main game loop
+    while (!WindowShouldClose()) {
+        BeginDrawing();
+        ClearBackground(DARKBLUE);
+        drawVehicle(&mover, YELLOW, RED);
+        wanderVehicle(&mover); 
+        updateVehicle(&mover);
+    	EndDrawing();
+    }
+
+    CloseWindow();   
+
+    return EXIT_SUCCESS;
+}
