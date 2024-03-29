@@ -14,11 +14,6 @@ typedef struct {
 	float index[3];
 } Matrix3x1;
 
-typedef struct {
-	float distance;
-	Vector2 point;
-} Intersection;
-
 int randomNum(int range_start, int range_end);
 float limitNum(float number, float limit);
 float constrainNum(float value, float min, float max); // limits value between min and max
@@ -37,11 +32,10 @@ Vector2 Vec2Perp(Vector2 v);
 float Vec2Mag(Vector2 v);
 float Vec2Magsq(Vector2 v);
 float Vec2Dist(Vector2 v1, Vector2 v2);
-Vector2 Vector2Rotate(Vector2 v, Vector2 base, float n);
+Vector2 Vec2Rotate(Vector2 v, Vector2 base, float n);
 float Vec2Heading(Vector2 v);
 float Vec2Angle(Vector2 v1, Vector2 v2);
 
-Intersection intersectLine(Vector2 start_a, Vector2 end_a, Vector2 start_b, Vector2 end_b);
 float minDistance(Vector2 p, Vector2 start_a, Vector2 end_a);
 
 

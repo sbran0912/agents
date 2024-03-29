@@ -101,7 +101,7 @@ float Vec2Dist(Vector2 v1, Vector2 v2) {
 	return Vec2Mag(vdist);
 }
 
-Vector2 Vector2Rotate(Vector2 v, Vector2 base, float n) {
+Vector2 Vec2Rotate(Vector2 v, Vector2 base, float n) {
 	Vector2 direction = Vec2Sub(v, base);
 	float x = direction.x * cosf(n) - direction.y * sinf(n);
 	float y = direction.x * sinf(n) + direction.y * cosf(n);
@@ -119,21 +119,6 @@ float Vec2Angle(Vector2 v1, Vector2 v2) {
     result = atan2f(det, dot);
 
     return result;
-}
-
-Intersection intersectLine(Vector2 start_a, Vector2 end_a, Vector2 start_b, Vector2 end_b) {
-	Vector2 a = Vec2Sub(end_a, start_a);
-	Vector2 b = Vec2Sub(end_b, start_b);
-	float cross1 = Vec2Cross(a, b);
-	float cross2 = Vec2Cross(b, a);
-	if (fabs(cross1 - 0.0f) > 0.01) { //Float kann man nicht direkt auf 0 testen!!!
-		float s = Vec2Cross(Vec2Sub(start_b, start_a), b) / cross1;
-		float u = Vec2Cross(Vec2Sub(start_a, start_b), a) / cross2;
-		if (s > 0.0001 && s < 1 && u > 0.0001 && u < 1) {
-			return (Intersection){s, Vec2Add(start_a, Vec2Scale(a, s))};
-		}
-	}
-	return (Intersection){0.0f, (Vector2){0.0f, 0.0f}};
 }
 
 float minDistance(Vector2 p, Vector2 start_a, Vector2 end_a) {

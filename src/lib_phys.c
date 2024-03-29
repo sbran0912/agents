@@ -1,5 +1,20 @@
 #include "lib_phys.h"
 
+Intersection intersectLine(Vector2 start_a, Vector2 end_a, Vector2 start_b, Vector2 end_b) {
+	Vector2 a = Vec2Sub(end_a, start_a);
+	Vector2 b = Vec2Sub(end_b, start_b);
+	float cross1 = Vec2Cross(a, b);
+	float cross2 = Vec2Cross(b, a);
+	if (fabs(cross1 - 0.0f) > 0.01) { //Float kann man nicht direkt auf 0 testen!!!
+		float s = Vec2Cross(Vec2Sub(start_b, start_a), b) / cross1;
+		float u = Vec2Cross(Vec2Sub(start_a, start_b), a) / cross2;
+		if (s > 0.0001 && s < 1 && u > 0.0001 && u < 1) {
+			return (Intersection){s, Vec2Add(start_a, Vec2Scale(a, s))};
+		}
+	}
+	return (Intersection){0.0f, (Vector2){0.0f, 0.0f}};
+}
+
 void _drawBox(Shape *box, float thick, Color c) {
     for (int i = 0; i < 4; i++)
     {
@@ -11,17 +26,17 @@ void _drawBox(Shape *box, float thick, Color c) {
 void _rotateBox(Shape *box, float angle) {
     for (int i = 0; i < 5; i++)
     {
-        box->vertices[i] = Vector2Rotate(box->vertices[i], box->location, angle);
+        box->vertices[i] = Vec2Rotate(box->vertices[i], box->location, angle);
     }
 }
 
 void _updateBox(Shape *box) {
     box->velocity = Vec2Add(box->velocity, box->accel);
-    e2_vecLimit(&box->velocity, 10.0f);
-    Vector2Set(&box->accel, 0.0f, 0.0f);
+    box->velocity =  Vec2Limit(box->velocity, 10.0f);
+    box->accel = (Vector2){0.0f, 0.0f};
 
     box->angVelocity += box->angAccel;
-    limitNum(box->angVelocity, 0.05f);
+    box->angVelocity = limitNum(box->angVelocity, 0.05f);
     box->angAccel = 0.0f;
 
     box->location = Vec2Add(box->location, box->velocity);
@@ -53,16 +68,16 @@ void _drawBall(Shape *ball, float thick, Color c) {
 }
 
 void _rotateBall(Shape* ball, float angle) {
-    ball->orientation = Vector2Rotate(ball->orientation, ball->location, angle);
+    ball->orientation = Vec2Rotate(ball->orientation, ball->location, angle);
 }
 
 void _updateBall(Shape* ball) {
     ball->velocity = Vec2Add(ball->velocity, ball->accel);
     e2_vecLimit(&ball->velocity, 10.0f);
-    Vector2Set(&ball->accel, 0.0f, 0.0f);
+    e2_vecSet(&ball->accel, 0.0f, 0.0f);
 
     ball->angVelocity += ball->angAccel;
-    limitNum(ball->angVelocity, 0.05f);
+    e2_limitNum(ball->angVelocity, 0.05f);
     ball->angAccel = 0.0f;
 
     ball->location = Vec2Add(ball->location, ball->velocity);
@@ -174,10 +189,10 @@ void e2_applyFriction(Shape* shape) {
     Vector2 frictForce = shape->velocity;
     e2_vecNorm(&frictForce);
     e2_vecScale(&frictForce, coefficient * -1); // in Gegenrichtung
-    e2_vecLimit(&frictForce, Vec2Mag(shape->velocity));
+    e2_vecLimit(&frictForce, e2_mag(shape->velocity));
 
     float frictAngDirection = shape->angVelocity < 0 ? 1 : -1; // in Gegenrichtung
-    float frictAngForce = limitNum(coefficient * 0.05 * frictAngDirection, abs(shape->angVelocity));
+    float frictAngForce = e2_limitNum(coefficient * 0.05 * frictAngDirection, abs(shape->angVelocity));
 
     e2_applyForce(shape, frictForce, frictAngForce);
 }
@@ -192,12 +207,12 @@ Vector2 e2_checkKick(Shape* shape) {
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
 
-        if (Vec2Dist(shape->location, mousePos) < 10) {
+        if (e2_dist(shape->location, mousePos) < 10) {
             shape->marked = true;
         }
 
         if (shape->marked) {
-            drawArrow(shape->location, mousePos, RED);
+            e2_drawArrow(shape->location, mousePos, RED);
         }
     }
 
@@ -253,7 +268,7 @@ CollisionPoint e2_detectCollBox(Shape* boxA, Shape* boxB) {
 CollisionPoint e2_detectCollBall(Shape* ballA, Shape* ballB) {
     //Distanz ermitteln
     float radiusTotal = ballA->radius + ballB->radius;
-    float dist = Vec2Dist(ballA->location, ballB->location);
+    float dist = e2_dist(ballA->location, ballB->location);
     if (dist < radiusTotal) {
         //Treffer
         float space = (radiusTotal - dist);
@@ -274,10 +289,10 @@ CollisionPoint e2_detectCollBallBox(Shape* ball, Shape* box) {
         //Vektor von Ecke der Box zum Ball
         Vector2 VerticeToBall = Vec2Sub(ball->location, box->vertices[i]);
         //Kollision mit Ecken abfangen
-        if (Vec2Mag(VerticeToBall) < ball->radius) {
+        if (e2_mag(VerticeToBall) < ball->radius) {
             return (CollisionPoint){true, box->vertices[i], VerticeToBall};
         }
-        float mag_e = Vec2Mag(e);
+        float mag_e = e2_mag(e);
         e2_vecNorm(&e);
         //Scalarprojektion von Vektor VerticeToBall auf Kante e
         float scalar_e = e2_dot(VerticeToBall, e);
@@ -288,12 +303,12 @@ CollisionPoint e2_detectCollBallBox(Shape* ball, Shape* box) {
             //Senkrechte von e zum Ball = VerticeToBall - e2
             Vector2 e_perp = Vec2Sub(VerticeToBall, e2);
 
-            if (Vec2Mag(e_perp) < ball->radius) {
+            if (e2_mag(e_perp) < ball->radius) {
                 //Ball berührt Box
                 //Abstand wieder herstellen mit mtv (minimal translation vector)
                 Vector2 mtv = e_perp;
                 Vector2 p = Vec2Add(box->vertices[i], e2);
-                e2_vecSetMag(&mtv, ball->radius - Vec2Mag(e_perp));
+                e2_vecSetMag(&mtv, ball->radius - e2_mag(e_perp));
                 //e_perp und damit mtv zeigt von Kante zu Ball
                 e2_shapeResetPos(ball, mtv);
                 //vor Berechnung muss e_perp normalisiert werden

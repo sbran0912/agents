@@ -5,6 +5,11 @@
 enum figure {BOX, BALL};
 
 typedef struct {
+	float distance;
+	Vector2 point;
+} Intersection;
+
+typedef struct {
     float minX;
     float maxX;
     float minY;
@@ -34,6 +39,8 @@ typedef struct shape_t {
     void (*funcUpdate)(struct shape_t*);
     void (*funcResetPos)(struct shape_t*, Vector2);
 } Shape;
+
+Intersection intersectLine(Vector2 start_a, Vector2 end_a, Vector2 start_b, Vector2 end_b);
 
 Shape e2_Box(float x, float y, float w, float h);
 Shape e2_Ball(float x, float y, float r);
