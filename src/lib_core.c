@@ -132,12 +132,12 @@ float minDistance(Vector2 p, Vector2 start_a, Vector2 end_a) {
 	float magnitude = Vec2Mag(line_a);
 
 	//Scalarprojecton from line (start_a to p) on line_a
-	e2_vecNorm(&line_a);
-	float sp = e2_dot(line_a, start_a_to_p);
+	line_a = Vec2Normalize(line_a);
+	float sp = Vec2DotProduct(line_a, start_a_to_p);
 
 	//Scalarprojection in magnitude of line_a?
 	if (sp > 0.0001 && sp <= magnitude) {
-		e2_vecScale(&line_a, sp);
+		line_a= Vec2Scale(line_a, sp);
 		dist = Vec2Mag(Vec2Sub(start_a_to_p, line_a));
 	}
 	return dist;

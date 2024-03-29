@@ -3,8 +3,8 @@
 Intersection intersectLine(Vector2 start_a, Vector2 end_a, Vector2 start_b, Vector2 end_b) {
 	Vector2 a = Vec2Sub(end_a, start_a);
 	Vector2 b = Vec2Sub(end_b, start_b);
-	float cross1 = Vec2Cross(a, b);
-	float cross2 = Vec2Cross(b, a);
+	float cross1 = Vec2CrossPoduct(a, b);
+	float cross2 = Vec2CrossPoduct(b, a);
 	if (fabs(cross1 - 0.0f) > 0.01) { //Float kann man nicht direkt auf 0 testen!!!
 		float s = Vec2Cross(Vec2Sub(start_b, start_a), b) / cross1;
 		float u = Vec2Cross(Vec2Sub(start_a, start_b), a) / cross2;
@@ -73,11 +73,11 @@ void _rotateBall(Shape* ball, float angle) {
 
 void _updateBall(Shape* ball) {
     ball->velocity = Vec2Add(ball->velocity, ball->accel);
-    e2_vecLimit(&ball->velocity, 10.0f);
-    e2_vecSet(&ball->accel, 0.0f, 0.0f);
+    ball->velocity = Vec2Limit(ball->velocity, 10.0f);
+    ball->accel = (Vector2){0.0f, 0.0f};
 
     ball->angVelocity += ball->angAccel;
-    e2_limitNum(ball->angVelocity, 0.05f);
+    ball->angVelocity = limitNum(ball->angVelocity, 0.05f);
     ball->angAccel = 0.0f;
 
     ball->location = Vec2Add(ball->location, ball->velocity);
@@ -93,7 +93,7 @@ void _resetPosBall(Shape *ball, Vector2 v) {
     }
 }
 
-Shadow e2_Shadow(Shape* shape) {
+Shadow createShadow(Shape* shape) {
     Shadow shadow;
     if (shape->typ == BALL) {
         shadow = (Shadow){
@@ -128,7 +128,7 @@ Shadow e2_Shadow(Shape* shape) {
     return shadow;
 }
 
-Shape e2_Box(float x, float y, float w, float h) {
+Shape Box(float x, float y, float w, float h) {
     Shape result = {
         .typ = BOX,
         .marked = false,
@@ -151,7 +151,7 @@ Shape e2_Box(float x, float y, float w, float h) {
     return result;
 }
 
-Shape e2_Ball(float x, float y, float r) {
+Shape Ball(float x, float y, float r) {
     Shape result = {
         .typ = BALL,
         .marked = false,
@@ -171,62 +171,61 @@ Shape e2_Ball(float x, float y, float r) {
     return result;
 }
 
-void e2_shapeDraw(Shape *shape, float thick, Color c) {
+void shapeDraw(Shape *shape, float thick, Color c) {
     shape->funcDraw(shape, thick, c);
 }
 
-void e2_shapeUpdate(Shape *shape) {
+void shapeUpdate(Shape *shape) {
     shape->funcUpdate(shape);
 }
 
-void e2_applyForce(Shape *shape, Vector2 force, float angForce) {
+void applyForce(Shape *shape, Vector2 force, float angForce) {
     shape->accel = Vec2Add(shape->accel, Vec2Div(force, shape->mass));
     shape->angAccel += angForce / shape->mass;
 }
 
-void e2_applyFriction(Shape* shape) {
+void applyFriction(Shape* shape) {
     float coefficient = 0.5f;
-    Vector2 frictForce = shape->velocity;
-    e2_vecNorm(&frictForce);
-    e2_vecScale(&frictForce, coefficient * -1); // in Gegenrichtung
-    e2_vecLimit(&frictForce, e2_mag(shape->velocity));
+    Vector2 frictForce = Vec2Normalize(shape->velocity);
+    frictForce = Vec2Scale(frictForce, coefficient * -1); // in Gegenrichtung
+    frictForce = Vec2Limit(frictForce, Vec2Mag(shape->velocity));
 
     float frictAngDirection = shape->angVelocity < 0 ? 1 : -1; // in Gegenrichtung
-    float frictAngForce = e2_limitNum(coefficient * 0.05 * frictAngDirection, abs(shape->angVelocity));
+    float frictAngForce = limitNum(coefficient * 0.05 * frictAngDirection, abs(shape->angVelocity));
 
-    e2_applyForce(shape, frictForce, frictAngForce);
+    applyForce(shape, frictForce, frictAngForce);
 }
 
-void e2_shapeResetPos(Shape *shape, Vector2 v) {
+void shapeResetPos(Shape *shape, Vector2 v) {
     shape->funcResetPos(shape, v);
 }
 
-Vector2 e2_checkKick(Shape* shape) {
+Vector2 checkKick(Shape* shape) {
 
     Vector2 mousePos = { (float)GetMouseX(), (float)GetMouseY() };
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
 
-        if (e2_dist(shape->location, mousePos) < 10) {
+        if (Vec2Dist(shape->location, mousePos) < 10) {
             shape->marked = true;
         }
 
         if (shape->marked) {
-            e2_drawArrow(shape->location, mousePos, RED);
+            DrawLineEx(shape->location, mousePos, 3, RED); //draw arrow
         }
     }
 
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && shape->marked) {
         shape->marked = false;
         Vector2 force = Vec2Sub(mousePos, shape->location);
-        e2_vecScale(&force, 5);
+        force = Vec2Scale(force, 5);
         return force;
     }
 
     return (Vector2){0, 0};
 }
 
-CollisionPoint e2_detectCollBox(Shape* boxA, Shape* boxB) {
+CollisionPoint detectCollBox(Shape* boxA, Shape* boxB) {
     // Geprüft wird, ob eine Ecke von boxA in die Kante von boxB schneidet
     // Zusätzlich muss die Linie von Mittelpunkt boxA und Mittelpunkt boxB durch Kante von boxB gehen
     // i ist Index von Ecke und j ist Index von Kante
@@ -251,13 +250,13 @@ CollisionPoint e2_detectCollBox(Shape* boxA, Shape* boxB) {
                     Vector2 e = Vec2Sub(boxB->vertices[j + 1], boxB->vertices[j]);
                     Vector2 e_perp = {-(e.y), e.x};
                     Vector2 d = Vec2Sub(boxA->vertices[i], boxA->location);  
-                    e2_vecScale(&d, 1-isd.distance);
-                    e2_vecNorm(&e_perp);
-                    float distance = e2_dot(e_perp, d);
-                    e2_vecScale(&e_perp, -distance); //mtv
-                    e2_shapeResetPos(boxA, Vec2Scale(e_perp, 0.5f));
-                    e2_shapeResetPos(boxB, Vec2Scale(e_perp, -0.5f));
-                    e2_vecNorm(&e_perp); // normal_e
+                    d = Vec2Scale(d, 1-isd.distance);
+                    e_perp = Vec2Normalize(e_perp);
+                    float distance = Vec2DotProduct(e_perp, d);
+                    e_perp = Vec2Scale(e_perp, -distance); //mtv
+                    shapeResetPos(boxA, Vec2Scale(e_perp, 0.5f));
+                    shapeResetPos(boxB, Vec2Scale(e_perp, -0.5f));
+                    e_perp = Vec2Normalize(e_perp); // normal_e
                     return (CollisionPoint){true, boxA->vertices[i], e_perp};                }
             }
         }
@@ -265,37 +264,37 @@ CollisionPoint e2_detectCollBox(Shape* boxA, Shape* boxB) {
     return (CollisionPoint) {false, {0.0f, 0.0f}, {0.0f, 0.0f}};
 };
 
-CollisionPoint e2_detectCollBall(Shape* ballA, Shape* ballB) {
+CollisionPoint detectCollBall(Shape* ballA, Shape* ballB) {
     //Distanz ermitteln
     float radiusTotal = ballA->radius + ballB->radius;
-    float dist = e2_dist(ballA->location, ballB->location);
+    float dist = Vec2Dist(ballA->location, ballB->location);
     if (dist < radiusTotal) {
         //Treffer
         float space = (radiusTotal - dist);
         Vector2 collisionLine = Vec2Sub(ballA->location, ballB->location);
-        e2_vecSetMag(&collisionLine, space);
-        e2_shapeResetPos(ballA, Vec2Scale( collisionLine, 0.5));
-        e2_shapeResetPos(ballB, Vec2Scale( collisionLine, -0.5));
-        e2_vecNorm(&collisionLine);
+        collisionLine = Vec2SetMag(collisionLine, space);
+        shapeResetPos(ballA, Vec2Scale( collisionLine, 0.5));
+        shapeResetPos(ballB, Vec2Scale( collisionLine, -0.5));
+        collisionLine = Vec2Normalize(collisionLine);
         return (CollisionPoint) {true, {0.0f, 0.0f}, collisionLine};
     }
     return (CollisionPoint) {false, {0.0f, 0.0f}, {0.0f, 0.0f}};
 }
 
-CollisionPoint e2_detectCollBallBox(Shape* ball, Shape* box) {
+CollisionPoint detectCollBallBox(Shape* ball, Shape* box) {
     for (int i = 0; i < 4; i++) {
         //Kante der Box
         Vector2 e = Vec2Sub(box->vertices[i+1], box->vertices[i]);
         //Vektor von Ecke der Box zum Ball
         Vector2 VerticeToBall = Vec2Sub(ball->location, box->vertices[i]);
         //Kollision mit Ecken abfangen
-        if (e2_mag(VerticeToBall) < ball->radius) {
+        if (Vec2Mag(VerticeToBall) < ball->radius) {
             return (CollisionPoint){true, box->vertices[i], VerticeToBall};
         }
-        float mag_e = e2_mag(e);
-        e2_vecNorm(&e);
+        float mag_e = Vec2Mag(e);
+        e = Vec2Normalize(e);
         //Scalarprojektion von Vektor VerticeToBall auf Kante e
-        float scalar_e = e2_dot(VerticeToBall, e);
+        float scalar_e = Vec2DotProduct(VerticeToBall, e);
         if (scalar_e > 0 && scalar_e <= mag_e) {
             //Senkrechte von Ball trifft auf Kante e der Box
             //e2 = Kante e mit der Länge von scalar_e
@@ -303,16 +302,16 @@ CollisionPoint e2_detectCollBallBox(Shape* ball, Shape* box) {
             //Senkrechte von e zum Ball = VerticeToBall - e2
             Vector2 e_perp = Vec2Sub(VerticeToBall, e2);
 
-            if (e2_mag(e_perp) < ball->radius) {
+            if (Vec2Mag(e_perp) < ball->radius) {
                 //Ball berührt Box
                 //Abstand wieder herstellen mit mtv (minimal translation vector)
                 Vector2 mtv = e_perp;
                 Vector2 p = Vec2Add(box->vertices[i], e2);
-                e2_vecSetMag(&mtv, ball->radius - e2_mag(e_perp));
+                mtv = Vec2SetMag(mtv, ball->radius - Vec2Mag(e_perp));
                 //e_perp und damit mtv zeigt von Kante zu Ball
-                e2_shapeResetPos(ball, mtv);
+                shapeResetPos(ball, mtv);
                 //vor Berechnung muss e_perp normalisiert werden
-                e2_vecNorm(&e_perp);
+                e_perp = Vec2Normalize(e_perp);
                 //resolveCollisionBallBox(ball, box, p, e_perp)
                 return (CollisionPoint){true, p, e_perp};
             }
@@ -321,7 +320,7 @@ CollisionPoint e2_detectCollBallBox(Shape* ball, Shape* box) {
     return (CollisionPoint) {false, {0.0f, 0.0f}, {0.0f, 0.0f}};
 }
 
-void e2_resolveCollBox(Shape* boxA, Shape* boxB, Vector2 cp, Vector2 normal) {
+void resolveCollBox(Shape* boxA, Shape* boxB, Vector2 cp, Vector2 normal) {
     // rAP = Linie von A.location zu Kollisionspunkt (Ecke i von BoxA)
     Vector2 rAP = Vec2Sub(cp, boxA->location);
     // rBP = Linie von B.location zu Kollisionspunkt (ebenfalls Ecke i von BoxA)
@@ -333,33 +332,33 @@ void e2_resolveCollBox(Shape* boxA, Shape* boxB, Vector2 cp, Vector2 normal) {
     Vector2 VgesamtA = Vec2Add(boxA->velocity, VtanA);
     Vector2 VgesamtB = Vec2Add(boxB->velocity, VtanB);
     Vector2 velocity_AB = Vec2Sub(VgesamtA, VgesamtB);
-    if (e2_dot(velocity_AB, normal) < 0) { // wenn negativ, dann auf Kollisionskurs
+    if (Vec2DotProduct(velocity_AB, normal) < 0) { // wenn negativ, dann auf Kollisionskurs
         float e = 1.0f; //inelastischer Stoß
-        float j_denominator = e2_dot(Vec2Scale(velocity_AB, -(1+e)), normal);
-        float j_divLinear = e2_dot(normal, Vec2Scale(normal, (1/boxA->mass + 1/boxB->mass)));
-        float j_divAngular = (float)pow(e2_dot(rAP_perp, normal), 2) / boxA->inertia + (float)pow(e2_dot(rBP_perp, normal), 2) / boxB->inertia;
+        float j_denominator = Vec2DotProduct(Vec2Scale(velocity_AB, -(1+e)), normal);
+        float j_divLinear = Vec2DotProduct(normal, Vec2Scale(normal, (1/boxA->mass + 1/boxB->mass)));
+        float j_divAngular = (float)pow(Vec2DotProduct(rAP_perp, normal), 2) / boxA->inertia + (float)pow(Vec2DotProduct(rBP_perp, normal), 2) / boxB->inertia;
         float j = j_denominator / (j_divLinear + j_divAngular);
         // Grundlage für Friction berechnen (t)
         Vector2 t = {-(normal.y), normal.x};
-        float t_scalarprodukt = e2_dot(velocity_AB, t);
-        e2_vecScale(&t, (t_scalarprodukt));
-        e2_vecNorm(&t);
+        float t_scalarprodukt = Vec2DotProduct(velocity_AB, t);
+        t = Vec2Scale(Vec2Normalize(t), (t_scalarprodukt));
+        
 
         //apply Force        
         Vector2 force = Vec2Add(Vec2Scale(normal, (j/boxA->mass)), Vec2Scale(t, (0.2*-j/boxA->mass)));
-        float force_ang = e2_dot(rAP_perp, Vec2Add(Vec2Scale(normal, j/boxA->inertia), Vec2Scale(t, 0.2*-j/boxA->inertia)));
+        float force_ang = Vec2DotProduct(rAP_perp, Vec2Add(Vec2Scale(normal, j/boxA->inertia), Vec2Scale(t, 0.2*-j/boxA->inertia)));
         boxA->accel = Vec2Add(boxA->accel, force);
         boxA->angAccel += force_ang;
 
         force = Vec2Add(Vec2Scale(normal, (-j/boxB->mass)), Vec2Scale(t, (0.2*j/boxB->mass)));
-        force_ang = e2_dot(rAP_perp, Vec2Add(Vec2Scale(normal, -j/boxB->inertia), Vec2Scale(t, 0.2*j/boxB->inertia)));
+        force_ang = Vec2DotProduct(rAP_perp, Vec2Add(Vec2Scale(normal, -j/boxB->inertia), Vec2Scale(t, 0.2*j/boxB->inertia)));
         boxB->accel = Vec2Add(boxB->accel, force);
         boxB->angAccel += force_ang;
 
     }
 }
 
-void e2_resolveCollBall(Shape* ballA, Shape* ballB, Vector2 normal) {
+void resolveCollBall(Shape* ballA, Shape* ballB, Vector2 normal) {
     Vector2 rA = Vec2Scale(normal, -ballA->radius);
     Vector2 rA_perp = {-rA.y, rA.x};
     Vector2 rB = Vec2Scale(normal, ballB->radius);
@@ -370,31 +369,30 @@ void e2_resolveCollBall(Shape* ballA, Shape* ballB, Vector2 normal) {
     Vector2 VgesamtB = Vec2Add(ballB->velocity, VtanB);
     Vector2 velocity_AB = Vec2Sub(VgesamtA, VgesamtB);   
     
-    if (e2_dot(velocity_AB, normal) < 0) { // wenn negativ, dann auf Kollisionskurs
+    if (Vec2DotProduct(velocity_AB, normal) < 0) { // wenn negativ, dann auf Kollisionskurs
         float e = 1; //inelastischer Stoß
-        float j_denominator = e2_dot(Vec2Scale(velocity_AB, -(1+e)), normal);
-        float j_divLinear = e2_dot(normal, Vec2Scale(normal, (1/ballA->mass + 1/ballB->mass)));
+        float j_denominator = Vec2DotProduct(Vec2Scale(velocity_AB, -(1+e)), normal);
+        float j_divLinear = Vec2DotProduct(normal, Vec2Scale(normal, (1/ballA->mass + 1/ballB->mass)));
         float j = j_denominator / j_divLinear;
         // Grundlage für Friction berechnen
         Vector2 t = {-normal.y, normal.x};
-        float t_scalarprodukt = e2_dot(velocity_AB, t);
-        e2_vecScale(&t, t_scalarprodukt);
-        e2_vecNorm(&t);
+        float t_scalarprodukt = Vec2DotProduct(velocity_AB, t);
+        t = Vec2Scale(Vec2Normalize(t), t_scalarprodukt);
 
         //apply Force
         Vector2 force = Vec2Add(Vec2Scale(normal, (0.8*j/ballA->mass)), Vec2Scale(t, (0.2*-j/ballA->mass)));
-        float force_ang = e2_dot(rA_perp, Vec2Scale(t, 0.1*-j/ballA->inertia));
+        float force_ang = Vec2DotProduct(rA_perp, Vec2Scale(t, 0.1*-j/ballA->inertia));
         ballA->accel = Vec2Add(ballA->accel, force);
         ballA->angAccel += force_ang;
 
         force = Vec2Add(Vec2Scale(normal, (0.8*-j/ballB->mass)), Vec2Scale(t, (0.2*j/ballB->mass)));
-        force_ang = e2_dot(rB_perp, Vec2Scale(t, 0.1*j/ballB->inertia));
+        force_ang = Vec2DotProduct(rB_perp, Vec2Scale(t, 0.1*j/ballB->inertia));
         ballB->accel = Vec2Add(ballB->accel, force);
         ballB->angAccel += force_ang;
     }
 }
 
-void e2_resolveCollBallBox(Shape* ball, Shape* box, Vector2 cp, Vector2 normal) {
+void resolveCollBallBox(Shape* ball, Shape* box, Vector2 cp, Vector2 normal) {
     Vector2 rA = Vec2Scale(normal, -ball->radius);
     Vector2 rA_perp = {-rA.y, rA.x};
     Vector2 rBP = Vec2Sub(cp, box->location);
@@ -405,35 +403,35 @@ void e2_resolveCollBallBox(Shape* ball, Shape* box, Vector2 cp, Vector2 normal) 
     Vector2 VgesamtB = Vec2Add(box->velocity, VtanB);
     Vector2 velocity_AB = Vec2Sub(VgesamtA, VgesamtB);
 
-    if (e2_dot(velocity_AB, normal) < 0) { // wenn negativ, dann auf Kollisionskurs
+    if (Vec2DotProduct(velocity_AB, normal) < 0) { // wenn negativ, dann auf Kollisionskurs
 
         float e = 1; //inelastischer Stoß
-        float j_denominator = e2_dot(Vec2Scale(velocity_AB, -(1+e)), normal);
-        float j_divLinear = e2_dot(normal, Vec2Scale(normal, (1/ball->mass + 1/box->mass)));
-        float j_divAngular = (float)pow(e2_dot(rBP_perp, normal), 2) / box->inertia; //nur für Box zu rechnen
+        float j_denominator = Vec2DotProduct(Vec2Scale(velocity_AB, -(1+e)), normal);
+        float j_divLinear = Vec2DotProduct(normal, Vec2Scale(normal, (1/ball->mass + 1/box->mass)));
+        float j_divAngular = (float)pow(Vec2DotProduct(rBP_perp, normal), 2) / box->inertia; //nur für Box zu rechnen
         float j = j_denominator / (j_divLinear + j_divAngular);
         // Grundlage für Friction berechnen
         Vector2 t = {-normal.y, normal.x};
-        float t_scalarprodukt = e2_dot(velocity_AB, t);
-        e2_vecScale(&t, t_scalarprodukt);
-        e2_vecNorm(&t);
+        float t_scalarprodukt = Vec2DotProduct(velocity_AB, t);
+        t = Vec2Scale(Vec2Normalize(t), t_scalarprodukt);
+
         // Apply Force
         Vector2 force = Vec2Add(Vec2Scale(normal, (0.8*j/ball->mass)), Vec2Scale(t, (0.05*-j/ball->mass)));
-        float force_ang = e2_dot(rA_perp, Vec2Scale(t, 0.05*-j/ball->inertia));
+        float force_ang = Vec2DotProduct(rA_perp, Vec2Scale(t, 0.05*-j/ball->inertia));
         ball->accel = Vec2Add(ball->accel, force);
         ball->angAccel += force_ang;
            
         force = Vec2Add(Vec2Scale(normal, (-j/box->mass)), Vec2Scale(t, (0.05*j/box->mass)));
-        force_ang = e2_dot(rBP_perp, Vec2Add(Vec2Scale(normal, -j/box->inertia), Vec2Scale(t, 0.05*j/box->inertia)));
+        force_ang = Vec2DotProduct(rBP_perp, Vec2Add(Vec2Scale(normal, -j/box->inertia), Vec2Scale(t, 0.05*j/box->inertia)));
         box->accel = Vec2Add(box->accel, force);
         box->angAccel += force_ang;
     }
 }
 
-void e2_checkColl(Shape* shapeA, Shape* shapeB) {
+void checkColl(Shape* shapeA, Shape* shapeB) {
     //Shadow berechnen von Element i und Element j 
-    Shadow shadowA = e2_Shadow(shapeA);
-    Shadow shadowB = e2_Shadow(shapeB);
+    Shadow shadowA = createShadow(shapeA);
+    Shadow shadowB = createShadow(shapeB);
     //Überschneidung prüfen
     if (shadowA.maxX >= shadowB.minX && shadowA.minX <= shadowB.maxX && shadowA.maxY >= shadowB.minY && shadowA.minY <= shadowB.maxY) {  
         //dann Überschneidung
@@ -443,14 +441,14 @@ void e2_checkColl(Shape* shapeA, Shape* shapeB) {
 
         if (shapeA->typ == BALL) {
             if (shapeB->typ == BALL) {
-                CollisionPoint cp = e2_detectCollBall(shapeA, shapeB);
+                CollisionPoint cp = detectCollBall(shapeA, shapeB);
                 if (cp.isCollision) {
-                    e2_resolveCollBall(shapeA, shapeB, cp.normal);
+                    resolveCollBall(shapeA, shapeB, cp.normal);
                 }
             } else {
-                CollisionPoint cp = e2_detectCollBallBox(shapeA, shapeB);
+                CollisionPoint cp = detectCollBallBox(shapeA, shapeB);
                 if (cp.isCollision) {
-                    e2_resolveCollBallBox(shapeA, shapeB, cp.cp, cp.normal);
+                    resolveCollBallBox(shapeA, shapeB, cp.cp, cp.normal);
                 }
             }
         }
@@ -459,19 +457,19 @@ void e2_checkColl(Shape* shapeA, Shape* shapeB) {
             if (shapeB->typ == BOX) {
                 // beide Boxen müssen geprüft werden, ob sie auf
                 // die jeweils andere trefen könnte
-                CollisionPoint cp = e2_detectCollBox(shapeA, shapeB);
+                CollisionPoint cp = detectCollBox(shapeA, shapeB);
                 if (cp.isCollision) {
-                    e2_resolveCollBox(shapeA, shapeB, cp.cp, cp.normal);  
+                    resolveCollBox(shapeA, shapeB, cp.cp, cp.normal);  
                 } else {
-                    CollisionPoint cp = e2_detectCollBox(shapeA, shapeB);    
+                    CollisionPoint cp = detectCollBox(shapeA, shapeB);    
                     if (cp.isCollision) {
-                        e2_resolveCollBox(shapeA, shapeB, cp.cp, cp.normal);
+                        resolveCollBox(shapeA, shapeB, cp.cp, cp.normal);
                     }
                 }
             } else {
-                CollisionPoint cp = e2_detectCollBallBox(shapeB, shapeA);
+                CollisionPoint cp = detectCollBallBox(shapeB, shapeA);
                 if (cp.isCollision) {
-                    e2_resolveCollBallBox(shapeB, shapeA, cp.cp, cp.normal);
+                    resolveCollBallBox(shapeB, shapeA, cp.cp, cp.normal);
                 }
             }            
         }
